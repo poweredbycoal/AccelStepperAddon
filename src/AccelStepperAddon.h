@@ -118,6 +118,15 @@ public:
 	{
 		// Define the library name
 		libName = "AccelStepperAddon/AccelStepperAddon";
+
+		// Initialize stepper pointers and run states
+	    for (int i = 0; i < MAX_NUMBER_STEPPERS; i++)
+	    {
+	        steppers[i] = NULL;
+	        runEnabled[i] = false;
+	        runSpeedEnabled[i] = false;
+	    }
+		
 		// Register the library to the server
 		a.registerLibrary(this);
 	}
@@ -128,17 +137,20 @@ public:
 	{
 		for (int i = 0; i < MAX_NUMBER_STEPPERS; i++)
 		{
-			if (runEnabled[i])
-			{
-				steppers[i]->run(); // Call run() method from Stepper Library
-			}
-			else if (runSpeedEnabled[i])
-			{
-				steppers[i]->runSpeed(); // Call runSpeed() method from Stepper Library
-			}
-			else if (runSpeedToPositionEnabled[i])
-			{
-				steppers[i]->runSpeedToPosition(); // Call runSpeedToPosition() method from Stepper Library
+			if (steppers[i] != NULL)
+        	{
+				if (runEnabled[i])
+				{
+					steppers[i]->run(); // Call run() method from Stepper Library
+				}
+				else if (runSpeedEnabled[i])
+				{
+					steppers[i]->runSpeed(); // Call runSpeed() method from Stepper Library
+				}
+				else if (runSpeedToPositionEnabled[i])
+				{
+					steppers[i]->runSpeedToPosition(); // Call runSpeedToPosition() method from Stepper Library
+				}
 			}
 		}
 	}
@@ -154,12 +166,28 @@ public:
 		{
 			// Get stepper ID from dataIn
 			byte stepperID = dataIn[0];
+			
+		    // Validate stepper ID
+		    if (stepperID >= MAX_NUMBER_STEPPERS)
+		    {
+		        sendResponseMsg(cmdID, 0, 0);
+		        break;
+		    }
+			
 			// Get interface from dataIn
 			byte interface = dataIn[1];
 			// Get pins from dataIn
 			byte pins[4] = { dataIn[2], dataIn[3], dataIn[4], dataIn[5] };
 			// Get enable from dataIn
 			bool enable = dataIn[6];
+		
+		    // If this slot already contains a stepper, free it first
+		    if (steppers[stepperID] != NULL)
+		    {
+		        delete steppers[stepperID];
+		        steppers[stepperID] = NULL;
+		    }
+			
 			// Create new stepper at pins
 			steppers[stepperID] = new AccelStepper(interface, pins[0], pins[1], pins[2], pins[3], enable);
 			// Print debug string and pins
@@ -172,14 +200,32 @@ public:
 		case DELETE_STEPPER:
 		{
 			// Get stepper ID from dataIn
-			byte stepperID = dataIn[0];
-			// Make NULL
-			steppers[stepperID] = NULL;
-			// Print debug string
-			debugPrint(MSG_DELETE_STEPPER, stepperID);
-			// Send response
-			sendResponseMsg(cmdID, 0, 0);
-			break;
+		    byte stepperID = dataIn[0];
+		
+		    // Validate stepper ID
+		    if (stepperID >= MAX_NUMBER_STEPPERS)
+		    {
+		        sendResponseMsg(cmdID, 0, 0);
+		        break;
+		    }
+			
+		    // Stop background execution
+		    runEnabled[stepperID] = false;
+		    runSpeedEnabled[stepperID] = false;
+			
+		    // Delete dynamically allocated stepper
+		    if (steppers[stepperID] != NULL)
+		    {
+		        delete steppers[stepperID];
+		        steppers[stepperID] = NULL;
+		    }
+			
+		    // Print debug string
+		    debugPrint(MSG_DELETE_STEPPER, stepperID);
+			
+		    // Send response
+		    sendResponseMsg(cmdID, 0, 0);
+		    break;
 		}
 
 		case MOVETO_STEPPER:
